@@ -1,0 +1,273 @@
+# 1. Get All Reviews
+GET customer_review/_search
+{
+  "query": {
+    "match_all": {}
+  }
+}
+
+# 2. Search for Reviews Containing "Amazing"
+GET customer_review/_search
+{
+  "query": {
+    "match_phrase": {
+      "text": "amazing"
+    }
+  }
+}
+
+# 3. Aggregate Reviews by Feedback Type
+GET customer_review/_search
+{
+  "size": 0,
+  "aggs": {
+    "group_by_feedback": {
+      "terms": {
+        "field": "feedback.keyword"
+      },
+      "aggs": {
+        "total_count": {
+          "value_count": {
+            "field": "feedback.keyword"
+          }
+        }
+      }
+    }
+  }
+}
+
+GET customer_review/_search
+{
+  "size": 0,
+  "aggs": {
+    "group_by_stars": {
+      "terms": {
+        "field": "stars.keyword"
+      },
+      "aggs": {
+        "total_count": {
+          "value_count": {
+            "field": "stars.keyword"
+          }
+        }
+      }
+    }
+  }
+}
+# 4. Reviews Trend Based on Month
+# Map the 'date' field to date type for better date aggregation
+PUT customer_review/_mapping
+{
+  "properties": {
+    "date": {
+      "type": "date"
+    }
+  }
+}
+
+# Aggregating reviews based on the monthly trend
+GET customer_review/_search
+{
+  "size": 0,
+  "aggs": {
+    "monthly_review_trends": {
+      "date_histogram": {
+        "script": {
+          "source": """
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+            LocalDateTime dateTime = LocalDateTime.parse(doc['date.keyword'].value, formatter);
+            dateTime.toInstant(ZoneOffset.UTC).toEpochMilli()
+          """
+        },
+        "calendar_interval": "month"
+      }
+    }
+  }
+}
+
+
+# 5. Top Reviewers
+GET /customer_review/_search
+{
+  "size": 0,
+  "aggs": {
+    "top_reviewers": {
+      "terms": {
+        "field": "user_id.keyword",
+        "size": 10
+      }
+    }
+  }
+}
+
+# 6. Top 5 Positive Restaurants
+GET /customer_review/_search
+{
+  "size": 0,
+  "aggs": {
+    "top_positive_reviews": {
+      "terms": {
+        "field": "business_id.keyword",
+        "size": 5,
+        "order": {
+          "count_positive_reviews": "desc"
+        }
+      },
+      "aggs": {
+        "count_positive_reviews": {
+          "filter": {
+            "term": {
+              "feedback.keyword": "POSITIVE"
+            }
+          },
+          "aggs": {
+            "avg_positive_stars": {
+              "avg": {
+                "field": "stars"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+# 7. Top 5 Negative Restaurants
+GET /customer_review/_search
+{
+  "size": 0,
+  "aggs": {
+    "businesses_with_top_ratings": {
+      "terms": {
+        "field": "business_id.keyword",
+        "size": 5
+      },
+      "aggs": {
+        "avg_stars": {
+          "avg": {
+            "field": "stars"
+          }
+        },
+        "top_reviews": {
+          "top_hits": {
+            "size": 1,
+            "_source": ["business_id", "stars", "text"],
+            "sort": [
+              {
+                "stars": {
+                  "order": "desc"
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}
+
+# 8. Top Restaurants with Five Stars and a Review
+GET customer_review/_search
+{
+  "size": 0,
+  "query": {
+    "term": {
+      "stars": {
+        "value": 5
+      }
+    }
+  },
+  "aggs": {
+    "top_businesses": {
+      "terms": {
+        "field": "business_id.keyword",
+        "size": 10,
+        "order": {
+          "count_reviews": "desc"
+        }
+      },
+      "aggs": {
+        "count_reviews": {
+          "value_count": {
+            "field": "stars"
+          }
+        },
+        "monthly_review_trends": {
+          "date_histogram": {
+            "script": {
+              "source": """
+                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+                LocalDateTime dateTime = LocalDateTime.parse(doc['date.keyword'].value, formatter);
+                dateTime.toInstant(ZoneOffset.UTC).toEpochMilli()
+              """
+            },
+            "calendar_interval": "month"
+          }
+        }
+      }
+    }
+  }
+}
+PUT /customer_review/_mapping
+{
+  "properties": {
+    "text": {
+      "type": "text",
+      "fields": {
+        "keyword": {
+          "type": "keyword"
+        }
+      }
+    }
+  }
+}
+PUT /customer_review/_mapping
+{
+  "properties": {
+    "text": {
+      "type": "text",
+      "fielddata": true
+    }
+  }
+}
+
+
+
+GET /customer_review/_search
+{
+  "size": 0,
+  "aggs": {
+    "top_positive_reviews": {
+      "terms": {
+        "field": "business_id.keyword",
+        "size": 15,
+        "order": {
+          "count_positive_reviews": "desc"
+        }
+      },
+      "aggs": {
+        "count_positive_reviews": {
+          "filter": {
+            "term": {
+              "feedback.keyword": "POSITIVE"
+            }
+          }
+        },
+        "word_cloud": {
+          "significant_text": {
+            "field": "text",
+            "size": 10,
+            "exclude": ["a", "an", "and", "are" ,"is", "the", "it", "back","be", "but","of", "to", "with", "at", "for","in", "on","had","i","here","bring","before","came","been","still","food","table","tables"]
+          }
+        }
+      }
+    }
+  }
+}
+
+
+
+
+
+
